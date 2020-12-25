@@ -267,7 +267,10 @@ namespace System.Net.Http
 
         private void ReadResponseTrailers()
         {
-            if (_readTrailingHeaders)
+            // Only load response trailers if:
+            // 1. HTTP/2 or later
+            // 2. Response trailers not already loaded
+            if (_readTrailingHeaders || _responseMessage.Version < WinHttpHandler.HttpVersion20)
             {
                 return;
             }
