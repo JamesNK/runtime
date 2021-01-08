@@ -310,7 +310,7 @@ namespace System.Net.Http
         {
             HttpResponseHeaders responseHeaders = response.Headers;
             HttpContentHeaders contentHeaders = response.Content.Headers;
-#if NETSTANDARD2_1 || NET6_0
+#if NETSTANDARD2_1
             HttpResponseHeaders responseTrailers = response.TrailingHeaders;
 #else
             HttpResponseTrailers responseTrailers = new HttpResponseTrailers();
