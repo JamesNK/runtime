@@ -19,6 +19,10 @@ namespace System.Net.Http
         UseWinInetProxy = 2,
         UseCustomProxy = 3,
     }
+    public static partial class WinHttpExtensions
+    {
+        public static System.Net.Http.Headers.HttpHeaders GetWinHttpTrailingHeaders(this System.Net.Http.HttpResponseMessage responseMessage) { throw null; }
+    }
     public partial class WinHttpHandler : System.Net.Http.HttpMessageHandler
     {
         public WinHttpHandler() { }

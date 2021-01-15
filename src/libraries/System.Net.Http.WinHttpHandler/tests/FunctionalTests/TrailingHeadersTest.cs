@@ -23,7 +23,7 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
         public TrailingHeadersTest(ITestOutputHelper output) : base(output)
         { }
 
-        protected override Version UseVersion => HttpVersion.Version20;
+        protected override Version UseVersion => new Version(2, 0);
 
         protected static byte[] DataBytes = Encoding.ASCII.GetBytes("data");
 
@@ -58,7 +58,7 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
                 HttpResponseMessage response = await sendTask;
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-                var trailingHeaders = GetTrailingHeaders(response);
+                var trailingHeaders = response.GetWinHttpTrailingHeaders();
                 Assert.NotNull(trailingHeaders);
                 Assert.Equal(0, trailingHeaders.Count());
             }
@@ -88,7 +88,7 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
                 HttpResponseMessage response = await sendTask;
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-                var trailingHeaders = GetTrailingHeaders(response);
+                var trailingHeaders = response.GetWinHttpTrailingHeaders();
                 Assert.Equal(TrailingHeaders.Count, trailingHeaders.Count());
                 Assert.Contains("amazingtrailer", trailingHeaders.GetValues("MyCoolTrailerHeader"));
                 Assert.Contains("World", trailingHeaders.GetValues("Hello"));
@@ -117,7 +117,7 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
                 // Pending read on the response content.
-                var trailingHeaders = GetTrailingHeaders(response);
+                var trailingHeaders = response.GetWinHttpTrailingHeaders();
                 Assert.True(trailingHeaders == null || trailingHeaders.Count() == 0);
 
                 Stream stream = await response.Content.ReadAsStreamAsync(TestAsync);
@@ -125,7 +125,7 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
                 await stream.ReadAsync(data, 0, data.Length);
 
                 // Intermediate test - haven't reached stream EOF yet.
-                trailingHeaders = GetTrailingHeaders(response);
+                trailingHeaders = response.GetWinHttpTrailingHeaders();
                 Assert.True(trailingHeaders == null || trailingHeaders.Count() == 0);
 
                 // Finish data stream and write out trailing headers.
@@ -135,7 +135,7 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
                 // Read data until EOF is reached
                 while (stream.Read(data, 0, data.Length) != 0) ;
 
-                trailingHeaders = GetTrailingHeaders(response);
+                trailingHeaders = response.GetWinHttpTrailingHeaders();
                 Assert.Equal(TrailingHeaders.Count, trailingHeaders.Count());
                 Assert.Contains("amazingtrailer", trailingHeaders.GetValues("MyCoolTrailerHeader"));
                 Assert.Contains("World", trailingHeaders.GetValues("Hello"));
@@ -143,7 +143,7 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
                 // Read when already zero. Trailers shouldn't be changed.
                 stream.Read(data, 0, data.Length);
 
-                trailingHeaders = GetTrailingHeaders(response);
+                trailingHeaders = response.GetWinHttpTrailingHeaders();
                 Assert.Equal(TrailingHeaders.Count, trailingHeaders.Count());
             }
         }
@@ -167,7 +167,7 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
                 HttpResponseMessage response = await sendTask;
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-                var trailingHeaders = GetTrailingHeaders(response);
+                var trailingHeaders = response.GetWinHttpTrailingHeaders();
                 Assert.Equal(TrailingHeaders.Count, trailingHeaders.Count());
                 Assert.Contains("amazingtrailer", trailingHeaders.GetValues("MyCoolTrailerHeader"));
                 Assert.Contains("World", trailingHeaders.GetValues("Hello"));
@@ -198,20 +198,10 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
                 Assert.Equal<byte>(Array.Empty<byte>(), await response.Content.ReadAsByteArrayAsync());
 
-                var trailingHeaders = GetTrailingHeaders(response);
+                var trailingHeaders = response.GetWinHttpTrailingHeaders();
                 Assert.Contains("amazingtrailer", trailingHeaders.GetValues("MyCoolTrailerHeader"));
                 Assert.Contains("World", trailingHeaders.GetValues("Hello"));
             }
-        }
-
-        private static HttpHeaders GetTrailingHeaders(HttpResponseMessage responseMessage)
-        {
-#if !NETFRAMEWORK
-            return responseMessage.TrailingHeaders;
-#else
-            responseMessage.RequestMessage.Properties.TryGetValue("__ResponseTrailers", out var trailers);
-            return (HttpHeaders)trailers;
-#endif
         }
     }
 }
