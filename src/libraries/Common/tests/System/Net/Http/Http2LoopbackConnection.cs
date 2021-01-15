@@ -340,13 +340,13 @@ namespace System.Net.Test.Common
             }
         }
 
-        public async Task<int> ReadRequestHeaderAsync()
+        public async Task<int> ReadRequestHeaderAsync(bool expectEndOfStream = true)
         {
-            HeadersFrame frame = await ReadRequestHeaderFrameAsync();
+            HeadersFrame frame = await ReadRequestHeaderFrameAsync(expectEndOfStream);
             return frame.StreamId;
         }
 
-        public async Task<HeadersFrame> ReadRequestHeaderFrameAsync()
+        public async Task<HeadersFrame> ReadRequestHeaderFrameAsync(bool expectEndOfStream = true)
         {
             // Receive HEADERS frame for request.
             Frame frame = await ReadFrameAsync(_timeout).ConfigureAwait(false);
@@ -356,8 +356,25 @@ namespace System.Net.Test.Common
             }
 
             Assert.Equal(FrameType.Headers, frame.Type);
-            Assert.Equal(FrameFlags.EndHeaders | FrameFlags.EndStream, frame.Flags);
+            Assert.Equal(FrameFlags.EndHeaders, frame.Flags & FrameFlags.EndHeaders);
+            if (expectEndOfStream)
+            {
+                Assert.Equal(FrameFlags.EndStream, frame.Flags & FrameFlags.EndStream);
+            }
             return (HeadersFrame)frame;
+        }
+
+        public async Task<Frame> ReadDataFrameAsync()
+        {
+            // Receive DATA frame for request.
+            Frame frame = await ReadFrameAsync(_timeout).ConfigureAwait(false);
+            if (frame == null)
+            {
+                throw new IOException("Failed to read Data frame.");
+            }
+
+            Assert.Equal(FrameType.Data, frame.Type);
+            return frame;
         }
 
         private static (int bytesConsumed, int value) DecodeInteger(ReadOnlySpan<byte> headerBlock, byte prefixMask)

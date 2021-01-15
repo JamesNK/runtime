@@ -941,12 +941,15 @@ namespace System.Net.Http
 
                         await InternalSendRequestAsync(state);
 
+                        // TODO: Need to await request send somewhere to propagate error.
+                        Task sendRequestBodyTask = null;
                         if (state.RequestMessage.Content != null)
                         {
-                            await InternalSendRequestBodyAsync(state, chunkedModeForSend).ConfigureAwait(false);
+                            sendRequestBodyTask = InternalSendRequestBodyAsync(state, chunkedModeForSend);
                         }
 
-                        bool receivedResponse = await InternalReceiveResponseHeadersAsync(state) != 0;
+                        var value = await InternalReceiveResponseHeadersAsync(state);
+                        bool receivedResponse = value != 0;
                         if (receivedResponse)
                         {
                             // If we're manually handling cookies, we need to add them to the container after
@@ -995,7 +998,10 @@ namespace System.Net.Http
             finally
             {
                 SafeWinHttpHandle.DisposeAndClearHandle(ref connectHandle);
-                state.ClearSendRequestState();
+
+                // TODO: Need to clear request state once request is finished.
+                // Could still be writing to request when response is returned.
+                //state.ClearSendRequestState();
             }
         }
 

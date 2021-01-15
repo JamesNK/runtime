@@ -37,6 +37,91 @@ namespace System.Net.Http.WinHttpHandlerFunctional.Tests
             new DataFrame(data, (endStream ? FrameFlags.EndStream : FrameFlags.None), 0, streamId);
 
         [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.SupportsAlpn))]
+        public async Task BidirectionalStreaming()
+        {
+            TaskCompletionSource<object> tcs = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            using (Http2LoopbackServer server = Http2LoopbackServer.CreateServer())
+            using (HttpClient client = CreateHttpClient())
+            {
+                HttpRequestMessage message = new HttpRequestMessage(HttpMethod.Post, server.Address);
+                message.Version = new Version(2, 0);
+                message.Content = new StreamingContent(async s =>
+                {
+                    await s.WriteAsync(new byte[50]);
+
+                    await tcs.Task;
+
+                    await s.WriteAsync(new byte[50]);
+                }, 100);
+
+                Task<HttpResponseMessage> sendTask = client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead);
+
+                Http2LoopbackConnection connection = await server.EstablishConnectionAsync();
+
+                int streamId = await connection.ReadRequestHeaderAsync(expectEndOfStream: false);
+
+                var frame = await connection.ReadDataFrameAsync();
+
+                // Response header.
+                await connection.SendDefaultResponseHeadersAsync(streamId);
+
+                // Response data.
+                await connection.WriteFrameAsync(MakeDataFrame(streamId, DataBytes, endStream: false));
+
+                // Server doesn't send trailing header frame.
+                HttpResponseMessage response = await sendTask;
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+                var responseStream = await response.Content.ReadAsStreamAsync();
+
+                var buffer = new byte[1024];
+                var readCount = await responseStream.ReadAsync(buffer, 0, buffer.Length);
+                Assert.Equal(DataBytes.Length, readCount);
+
+                tcs.SetResult(null);
+
+                frame = await connection.ReadDataFrameAsync();
+
+                // Response data.
+                await connection.WriteFrameAsync(MakeDataFrame(streamId, DataBytes, endStream: true));
+
+                readCount = await responseStream.ReadAsync(buffer, 0, buffer.Length);
+                Assert.Equal(DataBytes.Length, readCount);
+
+                readCount = await responseStream.ReadAsync(buffer, 0, buffer.Length);
+                Assert.Equal(0, readCount);
+
+                //var trailingHeaders = response.GetWinHttpTrailingHeaders();
+                //Assert.NotNull(trailingHeaders);
+                //Assert.Equal(0, trailingHeaders.Count());
+            }
+        }
+
+        private class StreamingContent : HttpContent
+        {
+            private readonly Func<Stream, Task> _writeFunc;
+            private readonly long _length;
+
+            public StreamingContent(Func<Stream, Task> writeFunc, long length)
+            {
+                _writeFunc = writeFunc;
+                _length = length;
+            }
+
+            protected override Task SerializeToStreamAsync(Stream stream, TransportContext context)
+            {
+                return _writeFunc(stream);
+            }
+
+            protected override bool TryComputeLength(out long length)
+            {
+                length = _length;
+                return true;
+            }
+        }
+
+        [ConditionalFact(typeof(PlatformDetection), nameof(PlatformDetection.SupportsAlpn))]
         public async Task Http2GetAsync_NoTrailingHeaders_EmptyCollection()
         {
             using (Http2LoopbackServer server = Http2LoopbackServer.CreateServer())
